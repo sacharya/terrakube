@@ -1,0 +1,7 @@
+#cloud-config
+write_files:
+  - path: /etc/resolv.conf
+    permissions: 0644
+    owner: root
+    content: |
+      nameserver 8.8.8.8

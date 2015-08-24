@@ -1,0 +1,15 @@
+username = "admin"
+tenant_name = "admin"
+password = "secrete"
+auth_url = "http://10.0.0.1:5000/v2.0"
+image_id = "f839cbbc-2a1c-47c8-a840-524be1b0180e" # coreos beta
+region_name = "ORD"
+subnet_id = "1c74b88b-6833-457a-bef2-d08ba1411586"
+name_prefix = "suda-kube"
+flavor_id = "3"
+private_net_id = "1c74b88b-6833-457a-bef2-d08ba1411586"
+worker_count = "1"
+
+etcd_name = "kubernetes-master"
+etcd_discovery = "https://discovery.etcd.io/558dc8719d2fe5a95d26f6f51d2f753"
+service_cluster_ip_range = "10.0.0.0/16"
