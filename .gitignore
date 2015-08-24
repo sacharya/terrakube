@@ -2,3 +2,12 @@
 *.backup
 *.tfvars
 *.csv
+rax/*.tfvars
+rax/*.backup
+rax/*.tfstate
+rax/*.csv
+rax/kube-master-userdata.yaml
+rax/kube-worker-userdata.yaml
+rax/kube-worker-userdata-2.yaml
+rax/kube-worker-userdata-3.yaml
+rax/kube-worker-userdata-4.yaml
