@@ -10,7 +10,40 @@ resource "openstack_compute_keypair_v2" "keypair" {
   name = "${var.name_prefix}-keypair"
   public_key = "${file("/home/stack/.ssh/id_rsa.pub")}"
 }
-
+resource "openstack_compute_secgroup_v2" "secgroup" {
+  name = "${var.name_prefix}-secgroup"
+  description = "Kube security group"
+  rule {
+    from_port = 22
+    to_port = 22
+    ip_protocol = "tcp"
+    cidr = "0.0.0.0/0"
+  }
+  rule {
+    from_port = 22
+    to_port = 22
+    ip_protocol = "tcp"
+    cidr = "::/0"
+  }
+  rule {
+    ip_protocol = "tcp"
+    from_port = "4001"
+    to_port = "4001"
+    cidr = "0.0.0.0/0"
+  }
+  rule {
+    ip_protocol = "tcp"
+    from_port = "2379"
+    to_port = "2379"
+    cidr = "0.0.0.0/0"
+  }
+  rule {
+    ip_protocol = "tcp"
+    from_port = "7001"
+    to_port = "7001"
+    cidr = "0.0.0.0/0"
+  }
+}
 resource "template_file" "cloudconf" {
   filename = "cloud.conf"
   vars {
@@ -27,6 +60,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
    image_id = "${var.image_id}"
    flavor_id = "${var.flavor_id}"
    key_pair = "${openstack_compute_keypair_v2.keypair.name}"
+   security_groups = ["${openstack_compute_secgroup_v2.secgroup.name}"]
    config_drive="true"
    user_data="${file("cloud-config.yaml")}"
    network {
@@ -59,16 +93,17 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         "sudo /usr/bin/cp /opt/.kubernetes_auth /opt/kubernetes_nginx/.kubernetes_auth",
 
         "sudo mkdir -p /etc/etcd",
-        "sudo bash -c \"echo 'name:${var.etcd_name}' > /etc/etcd/etcd.conf\"",
-        "sudo bash -c \"echo 'discovery:${var.etcd_discovery}' >> /etc/etcd/etcd.conf\"",
-        "sudo bash -c \"echo 'addr:http://${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}:4001' >> /etc/etcd/etcd.conf\"",
-        "sudo bash -c \"echo 'peer-addr:http://${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}:7001' >> /etc/etcd/etcd.conf\"",
-        "sudo bash -c \"echo 'peer-bind-addr:http://${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}:7001' >> /etc/etcd/etcd.conf\"",
+        "echo 'name = \"${var.etcd_name}\"' | sudo tee /etc/etcd/etcd.conf",
+        "echo 'discovery = \"${var.etcd_discovery}\"' | sudo tee -a /etc/etcd/etcd.conf",
+        "echo 'addr = \"${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}:4001\"' | sudo tee -a /etc/etcd/etcd.conf",
+        "echo '[peer]' | sudo tee -a /etc/etcd/etcd.conf",
+        "echo 'addr = \"${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}:7001\"' | sudo tee -a /etc/etcd/etcd.conf",
+        "echo 'bind_addr = \"${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}:7001\"' | sudo tee -a /etc/etcd/etcd.conf",
         "sudo systemctl restart etcd",
 
         "sudo mkdir -p /etc/fleet",
-        "sudo bash -c \"echo 'public-ip: ${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}' > /etc/fleet/fleet.conf\"",
-        "sudo bash -c \"echo 'metadata: kubernetes_role=master' >> /etc/fleet/fleet.conf\"",
+        "echo 'public-ip = \"${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}\"' | sudo tee /etc/fleet/fleet.conf",
+        "echo 'metadata = \"kubernetes_role=master\"' | sudo tee -a /etc/fleet/fleet.conf",
         "sudo systemctl restart fleet",
 
         "sudo chown -R core:core /opt/kubernetes",
