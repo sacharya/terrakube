@@ -20,27 +20,21 @@ resource "openstack_compute_secgroup_v2" "secgroup" {
     cidr = "0.0.0.0/0"
   }
   rule {
-    from_port = 22
-    to_port = 22
     ip_protocol = "tcp"
-    cidr = "::/0"
-  }
-  rule {
-    ip_protocol = "tcp"
-    from_port = "4001"
-    to_port = "4001"
+    from_port = 4001
+    to_port = 4001
     cidr = "0.0.0.0/0"
   }
   rule {
     ip_protocol = "tcp"
-    from_port = "2379"
-    to_port = "2379"
+    from_port = 2379
+    to_port = 2379
     cidr = "0.0.0.0/0"
   }
   rule {
     ip_protocol = "tcp"
-    from_port = "7001"
-    to_port = "7001"
+    from_port = 7001
+    to_port = 7001
     cidr = "0.0.0.0/0"
   }
 }
@@ -75,7 +69,25 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         agent = false
       } 
   }
-   provisioner "remote-exec" {
+  provisioner "file" {
+      source = "units/kube-apiserver.service"
+      destination = "/tmp/kube-apiserver.service"
+      connection {
+        user = "core"
+        key_file = "/home/stack/.ssh/id_rsa"
+        agent = false
+      }
+  }
+  provisioner "file" {
+      source = "units/apiserver-advertiser.service"
+      destination = "/tmp/apiserver-advertiser.service"
+      connection {
+        user = "core"
+        key_file = "/home/stack/.ssh/id_rsa"
+        agent = false
+      }
+  }
+  provisioner "remote-exec" {
      inline = [
         "sudo bash -c \"echo 'nameserver 8.8.8.8' >> /etc/resolv.conf\"",
 
@@ -112,6 +124,12 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         "sudo /usr/bin/mkdir -p /var/lib/kube-apiserver",
         "sudo chown -R core:core /var/lib/kube-apiserver",
         "sudo cp /tmp/known_tokens.csv /var/lib/kube-apiserver/known_tokens.csv",
+        "sudo cp /tmp/kube-apiserver.service /etc/systemd/system/kube-apiserver.service",
+        "sudo systemctl restart kube-apiserver.service",
+
+        "echo 'MASTER_IP=\"${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}\"' | sudo tee /etc/kube.env",
+        "sudo cp /tmp/apiserver-advertiser.service /etc/systemd/system/apiserver-advertiser.service",
+        "sudo systemctl restart apiserver-advertiser.service",
      ]
      connection {
         user = "core"
