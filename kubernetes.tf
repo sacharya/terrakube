@@ -8,7 +8,7 @@ provider "openstack" {
 # Create a keypair
 resource "openstack_compute_keypair_v2" "keypair" {
   name = "${var.name_prefix}-keypair"
-  public_key = "${file("/home/stack/.ssh/id_rsa.pub")}"
+  public_key = "${file("${var.ssh_pub_key_file}")}"
 }
 resource "openstack_compute_secgroup_v2" "secgroup" {
   name = "${var.name_prefix}-secgroup"
@@ -65,7 +65,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
       destination = "/tmp/known_tokens.csv"
       connection {
         user = "core"
-        key_file = "/home/stack/.ssh/id_rsa"
+        key_file = "${var.ssh_priv_key_file}"
         agent = false
       } 
   }
@@ -74,7 +74,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
       destination = "/tmp/kube-apiserver.service"
       connection {
         user = "core"
-        key_file = "/home/stack/.ssh/id_rsa"
+        key_file = "${var.ssh_priv_key_file}"
         agent = false
       }
   }
@@ -83,7 +83,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
       destination = "/tmp/apiserver-advertiser.service"
       connection {
         user = "core"
-        key_file = "/home/stack/.ssh/id_rsa"
+        key_file = "${var.ssh_priv_key_file}"
         agent = false
       }
   }
@@ -92,7 +92,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
       destination = "/tmp/kube-controller-manager.service"
       connection {
         user = "core"
-        key_file = "/home/stack/.ssh/id_rsa"
+        key_file = "${var.ssh_priv_key_file}"
         agent = false
       }
   }
@@ -101,7 +101,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
       destination = "/tmp/kube-scheduler.service"
       connection {
         user = "core"
-        key_file = "/home/stack/.ssh/id_rsa"
+        key_file = "${var.ssh_priv_key_file}"
         agent = false
       }
   }
@@ -110,7 +110,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
       destination = "/tmp/kube-nginx.service"
       connection {
         user = "core"
-        key_file = "/home/stack/.ssh/id_rsa"
+        key_file = "${var.ssh_priv_key_file}"
         agent = false
       }
   }
@@ -167,7 +167,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
      ]
      connection {
         user = "core"
-        key_file = "/home/stack/.ssh/id_rsa"
+        key_file = "${var.ssh_priv_key_file}"
         agent = false
      }
    }
