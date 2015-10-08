@@ -87,6 +87,33 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         agent = false
       }
   }
+  provisioner "file" {
+      source = "units/kube-controller-manager.service"
+      destination = "/tmp/kube-controller-manager.service"
+      connection {
+        user = "core"
+        key_file = "/home/stack/.ssh/id_rsa"
+        agent = false
+      }
+  }
+  provisioner "file" {
+      source = "units/kube-scheduler.service"
+      destination = "/tmp/kube-scheduler.service"
+      connection {
+        user = "core"
+        key_file = "/home/stack/.ssh/id_rsa"
+        agent = false
+      }
+  }
+  provisioner "file" {
+      source = "units/kube-nginx.service"
+      destination = "/tmp/kube-nginx.service"
+      connection {
+        user = "core"
+        key_file = "/home/stack/.ssh/id_rsa"
+        agent = false
+      }
+  }
   provisioner "remote-exec" {
      inline = [
         "sudo bash -c \"echo 'nameserver 8.8.8.8' >> /etc/resolv.conf\"",
@@ -130,6 +157,13 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         "echo 'MASTER_IP=\"${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}\"' | sudo tee /etc/kube.env",
         "sudo cp /tmp/apiserver-advertiser.service /etc/systemd/system/apiserver-advertiser.service",
         "sudo systemctl restart apiserver-advertiser.service",
+
+        "sudo cp /tmp/kube-controller-manager.service /etc/systemd/system/kube-controller-manager.service",
+        "sudo systemctl restart kube-controller-manager.service",
+        "sudo cp /tmp/kube-scheduler.service /etc/systemd/system/kube-scheduler.service",
+        "sudo systemctl restart kube-scheduler.service",
+        "sudo cp /tmp/kube-nginx.service /etc/systemd/system/kube-nginx.service",
+        "sudo systemctl restart kube-nginx.service",
      ]
      connection {
         user = "core"

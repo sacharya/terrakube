@@ -1,0 +1,14 @@
+[Unit]
+Description=Kubernetes Scheduler
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+After=network-online.target
+Requires=network-online.target
+After=kube-apiserver.service
+Requires=kube-apiserver.service
+[Service]
+ExecStartPre=/usr/bin/ln -sf /opt/kubernetes/server/bin/kube-scheduler /opt/bin/kube-scheduler
+ExecStart=/opt/bin/kube-scheduler \
+--logtostderr=true \
+-master=127.0.0.1:8080
+Restart=always
+RestartSec=5
