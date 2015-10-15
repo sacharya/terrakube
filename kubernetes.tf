@@ -185,8 +185,44 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
    image_id = "${var.image_id}"
    flavor_id = "${var.flavor_id}"
    key_pair = "${openstack_compute_keypair_v2.keypair.name}"
+   security_groups = ["${openstack_compute_secgroup_v2.secgroup.name}"]
+   config_drive="true"
+   user_data="${file("cloud-config.yaml")}"
    network {
     uuid = "${var.private_net_id}"
+   }
+   provisioner "remote-exec" {
+     inline = [
+        "sudo mkdir -p /opt",
+        "sudo wget https://storage.googleapis.com/kubernetes-release/release/v1.0.5/kubernetes.tar.gz -O /opt/kubernetes.tar.gz",
+        "sudo rm -rf /opt/kubernetes || false",
+        "sudo tar -xzf /opt/kubernetes.tar.gz -C /tmp/",
+
+        "sudo tar -xzf /tmp/kubernetes/server/kubernetes-server-linux-amd64.tar.gz -C /opt/",
+	"sudo mkdir -p /etc/etcd",
+        "echo 'name = \"${var.etcd_name}\"' | sudo tee /etc/etcd/etcd.conf",
+        "echo 'discovery = \"${var.etcd_discovery}\"' | sudo tee -a /etc/etcd/etcd.conf",
+        "echo 'addr = \"${self.access_ip_v4}:4001\"' | sudo tee -a /etc/etcd/etcd.conf",
+        "echo '[peer]' | sudo tee -a /etc/etcd/etcd.conf",
+        "echo 'addr = \"${self.access_ip_v4}:7001\"' | sudo tee -a /etc/etcd/etcd.conf",
+        "echo 'bind_addr = \"${self.access_ip_v4}:7001\"' | sudo tee -a /etc/etcd/etcd.conf",
+        "sudo systemctl restart etcd",
+
+        "sudo mkdir -p /etc/fleet",
+        "echo 'public-ip = \"${self.access_ip_v4}\"' | sudo tee /etc/fleet/fleet.conf",
+        "echo 'metadata = \"kubernetes_role=minion\"' | sudo tee -a /etc/fleet/fleet.conf",
+        "sudo systemctl restart fleet",
+
+        "sudo mkdir -p /etc/flannel",
+        "echo 'ip_masq = true' | sudo tee /etc/flannel/flannel.conf",
+        "echo 'interface = eth0' | sudo tee -a /etc/flannel/flannel.conf",
+	"sudo systemctl restart flannel",
+     ]
+     connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+     }
    }
 }
 
