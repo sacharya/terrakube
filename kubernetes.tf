@@ -121,7 +121,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         "sudo bash -c \"cat <<'EOF' > /etc/cloud.conf\n${template_file.cloudconf.rendered}\nEOF\"",
 
         "sudo mkdir -p /opt",
-        "sudo wget https://storage.googleapis.com/kubernetes-release/release/v0.21.3/kubernetes.tar.gz -O /opt/kubernetes.tar.gz",
+        "sudo wget https://storage.googleapis.com/kubernetes-release/release/v1.0.5/kubernetes.tar.gz -O /opt/kubernetes.tar.gz",
         "sudo rm -rf /opt/kubernetes || false",
         "sudo tar -xzf /opt/kubernetes.tar.gz -C /tmp/",
         "sudo tar -xzf /tmp/kubernetes/server/kubernetes-server-linux-amd64.tar.gz -C /opt/",
@@ -162,6 +162,11 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         "sudo systemctl restart kube-controller-manager.service",
         "sudo cp /tmp/kube-scheduler.service /etc/systemd/system/kube-scheduler.service",
         "sudo systemctl restart kube-scheduler.service",
+
+        "sudo git clone https://github.com/thommay/kubernetes_nginx /opt/kubernetes_nginx",
+        "echo 'admin:admin' | sudo tee /opt/.kubernetes_auth",
+        "sudo cp  /opt/.kubernetes_auth /opt/kubernetes_nginx/.kubernetes_auth",
+        "sudo /opt/kubernetes_nginx/git-kubernetes-nginx.sh",
         "sudo cp /tmp/kube-nginx.service /etc/systemd/system/kube-nginx.service",
         "sudo systemctl restart kube-nginx.service",
      ]

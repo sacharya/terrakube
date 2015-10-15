@@ -9,6 +9,6 @@ Requires=kube-apiserver.service
 ExecStartPre=/usr/bin/ln -sf /opt/kubernetes/server/bin/kube-scheduler /opt/bin/kube-scheduler
 ExecStart=/opt/bin/kube-scheduler \
 --logtostderr=true \
--master=127.0.0.1:8080
+--master=127.0.0.1:8080
 Restart=always
 RestartSec=5

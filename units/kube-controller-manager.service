@@ -10,6 +10,6 @@ ExecStartPre=/usr/bin/ln -sf /opt/kubernetes/server/bin/kube-controller-manager 
 ExecStart=/opt/bin/kube-controller-manager \
 --logtostderr=true \
 --master=127.0.0.1:8080 \
--v=2
+--v=2
 Restart=always
 RestartSec=5

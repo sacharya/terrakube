@@ -5,7 +5,6 @@ Requires=network-online.target
 After=docker.service
 Requires=docker.service
 [Service]
-ExecStartPre=/opt/bin/git-kubernetes-nginx.sh
 ExecStartPre=-/usr/bin/docker rm kubernetes_nginx
 ExecStart=/usr/bin/docker run --rm --net="host" -p "443:443" -t --name "kubernetes_nginx" kubernetes_nginx
 ExecStop=/usr/bin/docker stop kubernetes_nginx
