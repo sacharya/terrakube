@@ -12,6 +12,6 @@ variable "worker_count" {}
 variable "ssh_pub_key_file" {}
 variable "ssh_priv_key_file" {}
 
-variable "etcd_name" {}
-variable "etcd_discovery" {}
+variable "etcd_cluster_name" {}
+variable "etcd_discovery_url" {}
 variable "service_cluster_ip_range" {}

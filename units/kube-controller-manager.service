@@ -6,10 +6,8 @@ Requires=network-online.target
 After=kube-apiserver.service
 Requires=kube-apiserver.service
 [Service]
+EnvironmentFile=/etc/kubernetes.env
 ExecStartPre=/usr/bin/ln -sf /opt/kubernetes/server/bin/kube-controller-manager /opt/bin/kube-controller-manager
-ExecStart=/opt/bin/kube-controller-manager \
---logtostderr=true \
---master=127.0.0.1:8080 \
---v=2
+ExecStart=/opt/bin/kube-controller-manager $KUBE_CONTROLLER_MANAGER_OPTS
 Restart=always
 RestartSec=5

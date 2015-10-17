@@ -4,7 +4,7 @@ After=etcd.service
 Requires=etcd.service
 After=kube-apiserver.service
 [Service]
-EnvironmentFile=/etc/kube.env
+EnvironmentFile=/etc/kubernetes.env
 ExecStart=/bin/sh -c 'etcdctl set /corekube/apiservers/${MASTER_IP} ${MASTER_IP}'
 Restart=always
 RestartSec=120

@@ -33,6 +33,12 @@ resource "openstack_compute_secgroup_v2" "secgroup" {
   }
   rule {
     ip_protocol = "tcp"
+    from_port = 2380
+    to_port = 2380
+    cidr = "0.0.0.0/0"
+  }
+  rule {
+    ip_protocol = "tcp"
     from_port = 7001
     to_port = 7001
     cidr = "0.0.0.0/0"
@@ -46,6 +52,14 @@ resource "template_file" "cloudconf" {
     password = "${var.password}"
     tenant_name = "${var.tenant_name}"
     subnet_id = "${var.subnet_id}"
+  }
+}
+resource "template_file" "kubernetes" {
+  filename = "units/kubernetes.env"
+  vars {
+    etcd_cluster_name = "${var.etcd_cluster_name}"
+    etcd_discovery_url = "${var.etcd_discovery_url}"    
+    service_cluster_ip_range = "${var.service_cluster_ip_range}"
   }
 }
 # Create kubernetes master node
@@ -68,6 +82,33 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         key_file = "${var.ssh_priv_key_file}"
         agent = false
       } 
+  }
+  provisioner "file" {
+      source = "units/flannel.service"
+      destination = "/tmp/flannel.service"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
+  }
+  provisioner "file" {
+      source = "units/docker.service"
+      destination = "/tmp/docker.service"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
+  }
+  provisioner "file" {
+      source = "units/etcd.service"
+      destination = "/tmp/etcd.service"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
   }
   provisioner "file" {
       source = "units/kube-apiserver.service"
@@ -130,21 +171,21 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         "sudo git clone https://github.com/thommay/kubernetes_nginx /opt/kubernetes_nginx",
         "sudo /opt/kubernetes_nginx/git-kubernetes-nginx.sh",
         "sudo /usr/bin/cp /opt/.kubernetes_auth /opt/kubernetes_nginx/.kubernetes_auth",
+ 
+ 	"sudo bash -c \"cat <<'EOF' > /tmp/kubernetes.env\n${template_file.kubernetes.rendered}\nEOF\"",
+        "echo 'ETCD_NAME=${self.name}' | sudo tee -a /tmp/kubernetes.env",
+        "echo 'ETCD_ADDR=${self.network.0.fixed_ip_v4}:4001'  | sudo tee -a /tmp/kubernetes.env",
+        "echo 'ETCD_PEER_ADDR=${self.network.0.fixed_ip_v4}:7001'  | sudo tee -a /tmp/kubernetes.env",
+        "echo 'ETCD_PEER_BIND_ADDR=${self.network.0.fixed_ip_v4}:7001'  | sudo tee -a /tmp/kubernetes.env",
 
-        "sudo mkdir -p /etc/etcd",
-        "echo 'name = \"${var.etcd_name}\"' | sudo tee /etc/etcd/etcd.conf",
-        "echo 'discovery = \"${var.etcd_discovery}\"' | sudo tee -a /etc/etcd/etcd.conf",
-        "echo 'addr = \"${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}:4001\"' | sudo tee -a /etc/etcd/etcd.conf",
-        "echo '[peer]' | sudo tee -a /etc/etcd/etcd.conf",
-        "echo 'addr = \"${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}:7001\"' | sudo tee -a /etc/etcd/etcd.conf",
-        "echo 'bind_addr = \"${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}:7001\"' | sudo tee -a /etc/etcd/etcd.conf",
+        "sudo cp /tmp/kubernetes.env /etc/kubernetes.env",
+        "sudo cp /tmp/flannel.service /etc/systemd/system/flannel.service",
+        "sudo cp /tmp/docker.service /etc/systemd/system/docker.service",
+        "sudo cp /tmp/etcd.service /etc/systemd/system/etcd.service",
+        
+        "sudo systemctl restart docker",
         "sudo systemctl restart etcd",
-
-        "sudo mkdir -p /etc/fleet",
-        "echo 'public-ip = \"${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}\"' | sudo tee /etc/fleet/fleet.conf",
-        "echo 'metadata = \"kubernetes_role=master\"' | sudo tee -a /etc/fleet/fleet.conf",
-        "sudo systemctl restart fleet",
-
+    
         "sudo chown -R core:core /opt/kubernetes",
         "sudo mkdir /opt/bin",
         "sudo /usr/bin/ln -sf /opt/kubernetes/server/bin/kube-apiserver /opt/bin/kube-apiserver",
@@ -154,7 +195,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         "sudo cp /tmp/kube-apiserver.service /etc/systemd/system/kube-apiserver.service",
         "sudo systemctl restart kube-apiserver.service",
 
-        "echo 'MASTER_IP=\"${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}\"' | sudo tee /etc/kube.env",
+        "echo 'MASTER_IP=\"${self.network.0.fixed_ip_v4}\"' | sudo tee -a /etc/kubernetes.env",
         "sudo cp /tmp/apiserver-advertiser.service /etc/systemd/system/apiserver-advertiser.service",
         "sudo systemctl restart apiserver-advertiser.service",
 
@@ -176,6 +217,9 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         agent = false
      }
    }
+   depends_on = [
+        "template_file.kubernetes",
+    ]
 }
 
 # Create kubernetes worker nodes
@@ -191,32 +235,78 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
    network {
     uuid = "${var.private_net_id}"
    }
-   provisioner "remote-exec" {
+   provisioner "file" {
+      source = "units/etcd.service"
+      destination = "/tmp/etcd.service"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
+  }
+  provisioner "file" {
+      source = "units/apiservers-finder.service"
+      destination = "/tmp/apiservers-finder.service"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
+  }
+  provisioner "file" {
+      source = "units/apiservers-list.sh"
+      destination = "/tmp/apiservers-list.sh"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
+  }
+  provisioner "file" {
+      source = "units/kube-kubelet.service"
+      destination = "/tmp/kube-kubelet.service"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
+  }
+
+ provisioner "file" {
+      source = "units/kube-proxy.service"
+      destination = "/tmp/kube-proxy.service"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
+  }
+  provisioner "remote-exec" {
      inline = [
-        "sudo mkdir -p /opt",
+       "sudo mkdir -p /opt",
         "sudo wget https://storage.googleapis.com/kubernetes-release/release/v1.0.5/kubernetes.tar.gz -O /opt/kubernetes.tar.gz",
         "sudo rm -rf /opt/kubernetes || false",
         "sudo tar -xzf /opt/kubernetes.tar.gz -C /tmp/",
-
         "sudo tar -xzf /tmp/kubernetes/server/kubernetes-server-linux-amd64.tar.gz -C /opt/",
-	"sudo mkdir -p /etc/etcd",
-        "echo 'name = \"${var.etcd_name}\"' | sudo tee /etc/etcd/etcd.conf",
-        "echo 'discovery = \"${var.etcd_discovery}\"' | sudo tee -a /etc/etcd/etcd.conf",
-        "echo 'addr = \"${self.access_ip_v4}:4001\"' | sudo tee -a /etc/etcd/etcd.conf",
-        "echo '[peer]' | sudo tee -a /etc/etcd/etcd.conf",
-        "echo 'addr = \"${self.access_ip_v4}:7001\"' | sudo tee -a /etc/etcd/etcd.conf",
-        "echo 'bind_addr = \"${self.access_ip_v4}:7001\"' | sudo tee -a /etc/etcd/etcd.conf",
+        "sudo chown -R core:core /opt/kubernetes",
+        "sudo mkdir /opt/bin",
+
+	"sudo bash -c \"cat <<'EOF' > /tmp/kubernetes.env\n${template_file.kubernetes.rendered}\nEOF\"",
+        "echo 'ETCD_NAME=${self.name}' | sudo tee -a /tmp/kubernetes.env",
+        "echo 'ETCD_ADDR=${self.network.0.fixed_ip_v4}:4001'  | sudo tee -a /tmp/kubernetes.env",
+        "echo 'ETCD_PEER_ADDR=${self.network.0.fixed_ip_v4}:7001'  | sudo tee -a /tmp/kubernetes.env",
+        "echo 'ETCD_PEER_BIND_ADDR=${self.network.0.fixed_ip_v4}:7001'  | sudo tee -a /tmp/kubernetes.env",
+        "sudo cp /tmp/kubernetes.env /etc/kubernetes.env",
+        "sudo cp /tmp/etcd.service /etc/systemd/system/etcd.service",
         "sudo systemctl restart etcd",
-
-        "sudo mkdir -p /etc/fleet",
-        "echo 'public-ip = \"${self.access_ip_v4}\"' | sudo tee /etc/fleet/fleet.conf",
-        "echo 'metadata = \"kubernetes_role=minion\"' | sudo tee -a /etc/fleet/fleet.conf",
-        "sudo systemctl restart fleet",
-
-        "sudo mkdir -p /etc/flannel",
-        "echo 'ip_masq = true' | sudo tee /etc/flannel/flannel.conf",
-        "echo 'interface = eth0' | sudo tee -a /etc/flannel/flannel.conf",
-	"sudo systemctl restart flannel",
+        
+        "sudo chmod 0755 /tmp/apiservers-list.sh",
+        "sudo cp /tmp/apiservers-finder.service /etc/systemd/system/apiservers-finder.service",
+        "sudo systemctl restart apiservers-finder.service",
+	"sudo cp /tmp/kube-kubelet.service /etc/systemd/system/kube-kubelet.service",
+        "sudo systemctl restart kube-kubelet.service",
+        "sudo cp /tmp/kube-proxy.service /etc/systemd/system/kube-proxy.service",
+        "sudo systemctl restart kube-proxy.service",
      ]
      connection {
         user = "core"
@@ -224,6 +314,10 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
         agent = false
      }
    }
+   depends_on = [
+        "openstack_compute_instance_v2.suda-terraform-kube-master",
+        "template_file.kubernetes",
+    ]
 }
 
 output "master_ip" {
