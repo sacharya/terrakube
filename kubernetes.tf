@@ -321,7 +321,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
 }
 
 output "master_ip" {
-  value = "${openstack_compute_instance_v2.suda-terraform-kube-master.addresses.private.addr}"
+  value = "${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}"
 }
 
 output "worker_ips" {
