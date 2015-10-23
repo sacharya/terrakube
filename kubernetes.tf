@@ -262,8 +262,26 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
     uuid = "${var.private_net_id}"
    }
    provisioner "file" {
+      source = "units/docker.service"
+      destination = "/tmp/docker.service"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
+  }
+   provisioner "file" {
       source = "units/etcd.service"
       destination = "/tmp/etcd.service"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
+  }
+  provisioner "file" {
+      source = "units/flannel.service"
+      destination = "/tmp/flannel.service"
       connection {
         user = "core"
         key_file = "${var.ssh_priv_key_file}"
@@ -332,10 +350,20 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
         "echo 'ETCD_PEER_ADDR=${self.network.0.fixed_ip_v4}:7001'  | sudo tee -a /tmp/kubernetes.env",
         "echo 'ETCD_PEER_BIND_ADDR=${self.network.0.fixed_ip_v4}:7001'  | sudo tee -a /tmp/kubernetes.env",
         "echo 'HOSTNAME_OVERRIDE=--hostname_override=${self.network.0.fixed_ip_v4}' | sudo tee -a /tmp/kubernetes.env",
+        "echo 'FLANNEL_OPTS=--ip-masq=true' | sudo tee -a /tmp/kubernetes.env",
+        "echo 'FLANNEL_ETCDCTL_OPTS=-C ${self.network.0.fixed_ip_v4}' | sudo tee -a /tmp/kubernetes.env",
 
         "sudo cp /tmp/kubernetes.env /etc/kubernetes.env",
         "sudo cp /tmp/etcd.service /etc/systemd/system/etcd.service",
         "sudo systemctl restart etcd",
+
+        "sudo /usr/bin/mkdir -p /etc/systemd/system/flanneld.service.d",
+        "sudo cp /tmp/flannel.service /etc/systemd/system/flanneld.service.d/50-flannel.conf",
+
+        "sudo /usr/bin/mkdir -p /etc/systemd/system/docker.service.d",
+        "sudo cp /tmp/docker.service /etc/systemd/system/docker.service.d/51-docker-mirror.conf",
+        "sudo systemctl restart flanneld.service",
+        "sudo systemctl restart docker.service",
 
         "sudo chmod 0755 /tmp/apiservers-list.sh",
         "sudo cp /tmp/apiservers-finder.service /etc/systemd/system/apiservers-finder.service",
