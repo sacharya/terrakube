@@ -8,6 +8,6 @@ Requires=docker.service
 EnvironmentFile=/etc/kubernetes.env
 EnvironmentFile=/etc/apiservers.env
 ExecStartPre=/usr/bin/ln -sf /opt/kubernetes/server/bin/kubelet /opt/bin/kubelet
-ExecStart=/opt/bin/kubelet $KUBE_KUBELET_OPTS $API_SERVERS
+ExecStart=/opt/bin/kubelet $KUBE_KUBELET_OPTS $KUBE_KUBELET_MORE_OPTS
 Restart=always
 RestartSec=5

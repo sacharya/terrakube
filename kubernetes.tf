@@ -38,6 +38,12 @@ resource "openstack_compute_secgroup_v2" "secgroup" {
     cidr = "0.0.0.0/0"
   }
   rule {
+    from_port = 6443
+    to_port = 6443
+    ip_protocol = "tcp"
+    cidr = "0.0.0.0/0"
+  }
+  rule {
     ip_protocol = "tcp"
     from_port = 7001
     to_port = 7001
@@ -62,6 +68,19 @@ resource "template_file" "kubernetes" {
     service_cluster_ip_range = "${var.service_cluster_ip_range}"
   }
 }
+resource "template_file" "tokens" {
+  filename = "units/tokens.csv"
+  vars {
+    kubelet_token = "${var.kubelet_token}"
+    kubeproxy_token = "${var.kubeproxy_token}"
+  }
+}
+resource "template_file" "kubeconfig" {
+  filename = "units/kubeconfig"
+  vars {
+    kubelet_token = "${var.kubelet_token}"
+  }
+}
 # Create kubernetes master node
 resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
    name = "${var.name_prefix}_master"
@@ -74,15 +93,6 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
    network {
       uuid = "${var.private_net_id}"
    }
-   provisioner "file" {
-      source = "tokens.csv"
-      destination = "/tmp/known_tokens.csv"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      } 
-  }
   provisioner "file" {
       source = "units/flannel.service"
       destination = "/tmp/flannel.service"
@@ -155,6 +165,15 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         agent = false
       }
   }
+  provisioner "file" {
+    source = "units/tokens.csv"
+    destination = "/tmp/known_tokens.csv"
+    connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+    }
+  }
   provisioner "remote-exec" {
      inline = [
         "sudo bash -c \"echo 'nameserver 8.8.8.8' >> /etc/resolv.conf\"",
@@ -189,6 +208,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         "sudo chown -R core:core /opt/kubernetes",
         "sudo mkdir /opt/bin",
         "sudo /usr/bin/ln -sf /opt/kubernetes/server/bin/kube-apiserver /opt/bin/kube-apiserver",
+        "sudo bash -c \"cat <<'EOF' > /tmp/tokens.csv\n${template_file.tokens.rendered}\nEOF\"",
         "sudo /usr/bin/mkdir -p /var/lib/kube-apiserver",
         "sudo chown -R core:core /var/lib/kube-apiserver",
         "sudo cp /tmp/known_tokens.csv /var/lib/kube-apiserver/known_tokens.csv",
@@ -281,6 +301,15 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
         agent = false
       }
   }
+  provisioner "file" {
+      source = "units/kubeconfig"
+      destination = "/tmp/kubeconfig"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
+  }
   provisioner "remote-exec" {
      inline = [
        "sudo mkdir -p /opt",
@@ -303,6 +332,11 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
         "sudo chmod 0755 /tmp/apiservers-list.sh",
         "sudo cp /tmp/apiservers-finder.service /etc/systemd/system/apiservers-finder.service",
         "sudo systemctl restart apiservers-finder.service",
+
+        "sudo bash -c \"cat <<'EOF' > /tmp/kubeconfig\n${template_file.kubeconfig.rendered}\nEOF\"",        
+        "sudo /usr/bin/mkdir -p /var/lib/kubelet",
+        "sudo chown -R core:core /var/lib/kubelet",
+        "sudo cp /tmp/kubeconfig /var/lib/kubelet/kubeconfig",
 	"sudo cp /tmp/kube-kubelet.service /etc/systemd/system/kube-kubelet.service",
         "sudo systemctl restart kube-kubelet.service",
         "sudo cp /tmp/kube-proxy.service /etc/systemd/system/kube-proxy.service",
