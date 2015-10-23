@@ -13,7 +13,7 @@ variable "ssh_pub_key_file" {}
 variable "ssh_priv_key_file" {}
 
 variable "kubelet_token" {}
-variable "kubeproxy_token" {}
+variable "kube_proxy_token" {}
 
 variable "etcd_cluster_name" {}
 variable "etcd_discovery_url" {}

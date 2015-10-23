@@ -3,11 +3,11 @@ Description=Kubernetes Kubelet
 Documentation=https://github.com/GoogleCloudPlatform/kubernetes
 After=docker.service
 Requires=docker.service
-
+After=apiserver-finder.service
 [Service]
 EnvironmentFile=/etc/kubernetes.env
 EnvironmentFile=/etc/apiservers.env
 ExecStartPre=/usr/bin/ln -sf /opt/kubernetes/server/bin/kubelet /opt/bin/kubelet
-ExecStart=/opt/bin/kubelet $KUBE_KUBELET_OPTS $KUBE_KUBELET_MORE_OPTS
+ExecStart=/opt/bin/kubelet $KUBE_KUBELET_OPTS $API_SERVERS $HOSTNAME_OVERRIDE
 Restart=always
 RestartSec=5

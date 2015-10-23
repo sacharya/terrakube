@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Config
 users:
-- name: kubelet
+- name: kube-proxy
   user:
-    token: ${kubelet_token}
+    token: ${kube_proxy_token}
 clusters:
 - name: local
   cluster:
@@ -11,6 +11,6 @@ clusters:
 contexts:
 - context:
     cluster: local
-    user: kubelet
+    user: kube-proxy
   name: service-account-context
 current-context: service-account-context

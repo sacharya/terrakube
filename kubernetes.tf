@@ -72,13 +72,19 @@ resource "template_file" "tokens" {
   filename = "units/tokens.csv"
   vars {
     kubelet_token = "${var.kubelet_token}"
-    kubeproxy_token = "${var.kubeproxy_token}"
+    kube_proxy_token = "${var.kube_proxy_token}"
   }
 }
 resource "template_file" "kubeconfig" {
   filename = "units/kubeconfig"
   vars {
     kubelet_token = "${var.kubelet_token}"
+  }
+}
+resource "template_file" "kube-proxy-config" {
+  filename = "units/kube-proxy-config"
+  vars {
+    kube_proxy_token = "${var.kube_proxy_token}"
   }
 }
 # Create kubernetes master node
@@ -190,8 +196,8 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         "sudo git clone https://github.com/thommay/kubernetes_nginx /opt/kubernetes_nginx",
         "sudo /opt/kubernetes_nginx/git-kubernetes-nginx.sh",
         "sudo /usr/bin/cp /opt/.kubernetes_auth /opt/kubernetes_nginx/.kubernetes_auth",
- 
- 	"sudo bash -c \"cat <<'EOF' > /tmp/kubernetes.env\n${template_file.kubernetes.rendered}\nEOF\"",
+
+        "sudo bash -c \"cat <<'EOF' > /tmp/kubernetes.env\n${template_file.kubernetes.rendered}\nEOF\"",
         "echo 'ETCD_NAME=${self.name}' | sudo tee -a /tmp/kubernetes.env",
         "echo 'ETCD_ADDR=${self.network.0.fixed_ip_v4}:4001'  | sudo tee -a /tmp/kubernetes.env",
         "echo 'ETCD_PEER_ADDR=${self.network.0.fixed_ip_v4}:7001'  | sudo tee -a /tmp/kubernetes.env",
@@ -204,11 +210,11 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
         
         "sudo systemctl restart docker",
         "sudo systemctl restart etcd",
-    
+
         "sudo chown -R core:core /opt/kubernetes",
         "sudo mkdir /opt/bin",
         "sudo /usr/bin/ln -sf /opt/kubernetes/server/bin/kube-apiserver /opt/bin/kube-apiserver",
-        "sudo bash -c \"cat <<'EOF' > /tmp/tokens.csv\n${template_file.tokens.rendered}\nEOF\"",
+        "sudo bash -c \"cat <<'EOF' > /tmp/known_tokens.csv\n${template_file.tokens.rendered}\nEOF\"",
         "sudo /usr/bin/mkdir -p /var/lib/kube-apiserver",
         "sudo chown -R core:core /var/lib/kube-apiserver",
         "sudo cp /tmp/known_tokens.csv /var/lib/kube-apiserver/known_tokens.csv",
@@ -320,25 +326,32 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
         "sudo chown -R core:core /opt/kubernetes",
         "sudo mkdir /opt/bin",
 
-	"sudo bash -c \"cat <<'EOF' > /tmp/kubernetes.env\n${template_file.kubernetes.rendered}\nEOF\"",
+        "sudo bash -c \"cat <<'EOF' > /tmp/kubernetes.env\n${template_file.kubernetes.rendered}\nEOF\"",
         "echo 'ETCD_NAME=${self.name}' | sudo tee -a /tmp/kubernetes.env",
         "echo 'ETCD_ADDR=${self.network.0.fixed_ip_v4}:4001'  | sudo tee -a /tmp/kubernetes.env",
         "echo 'ETCD_PEER_ADDR=${self.network.0.fixed_ip_v4}:7001'  | sudo tee -a /tmp/kubernetes.env",
         "echo 'ETCD_PEER_BIND_ADDR=${self.network.0.fixed_ip_v4}:7001'  | sudo tee -a /tmp/kubernetes.env",
+        "echo 'HOSTNAME_OVERRIDE=--hostname_override=${self.network.0.fixed_ip_v4}' | sudo tee -a /tmp/kubernetes.env",
+
         "sudo cp /tmp/kubernetes.env /etc/kubernetes.env",
         "sudo cp /tmp/etcd.service /etc/systemd/system/etcd.service",
         "sudo systemctl restart etcd",
-        
+
         "sudo chmod 0755 /tmp/apiservers-list.sh",
         "sudo cp /tmp/apiservers-finder.service /etc/systemd/system/apiservers-finder.service",
         "sudo systemctl restart apiservers-finder.service",
 
-        "sudo bash -c \"cat <<'EOF' > /tmp/kubeconfig\n${template_file.kubeconfig.rendered}\nEOF\"",        
+        "sudo bash -c \"cat <<'EOF' > /tmp/kubeconfig\n${template_file.kubeconfig.rendered}\nEOF\"",
         "sudo /usr/bin/mkdir -p /var/lib/kubelet",
         "sudo chown -R core:core /var/lib/kubelet",
         "sudo cp /tmp/kubeconfig /var/lib/kubelet/kubeconfig",
-	"sudo cp /tmp/kube-kubelet.service /etc/systemd/system/kube-kubelet.service",
+        "sudo cp /tmp/kube-kubelet.service /etc/systemd/system/kube-kubelet.service",
         "sudo systemctl restart kube-kubelet.service",
+
+        "sudo bash -c \"cat <<'EOF' > /tmp/kube-proxy-config\n${template_file.kube-proxy-config.rendered}\nEOF\"",
+        "sudo /usr/bin/mkdir -p /var/lib/kube-proxy",
+        "sudo chown -R core:core /var/lib/kube-proxy",
+        "sudo cp /tmp/kube-proxy-config /var/lib/kube-proxy/kube-proxy-config",
         "sudo cp /tmp/kube-proxy.service /etc/systemd/system/kube-proxy.service",
         "sudo systemctl restart kube-proxy.service",
      ]
