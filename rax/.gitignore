@@ -1,7 +1,0 @@
-kube-master-userdata.yaml
-kube-worker-userdata.yaml
-terraform.tfvars
-known_tokens.csv
-tokens.csv
-terraform.tfstate
-terraform.tfstate.backup
