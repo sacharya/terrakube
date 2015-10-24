@@ -14,39 +14,15 @@ resource "openstack_compute_secgroup_v2" "secgroup" {
   name = "${var.name_prefix}-secgroup"
   description = "Kube security group"
   rule {
-    from_port = 22
-    to_port = 22
-    ip_protocol = "tcp"
+    ip_protocol = "icmp"
+    from_port = -1
+    to_port = -1
     cidr = "0.0.0.0/0"
   }
   rule {
     ip_protocol = "tcp"
-    from_port = 4001
-    to_port = 4001
-    cidr = "0.0.0.0/0"
-  }
-  rule {
-    ip_protocol = "tcp"
-    from_port = 2379
-    to_port = 2379
-    cidr = "0.0.0.0/0"
-  }
-  rule {
-    ip_protocol = "tcp"
-    from_port = 2380
-    to_port = 2380
-    cidr = "0.0.0.0/0"
-  }
-  rule {
-    from_port = 6443
-    to_port = 6443
-    ip_protocol = "tcp"
-    cidr = "0.0.0.0/0"
-  }
-  rule {
-    ip_protocol = "tcp"
-    from_port = 7001
-    to_port = 7001
+    from_port = 1
+    to_port = 65535
     cidr = "0.0.0.0/0"
   }
 }
@@ -88,7 +64,7 @@ resource "template_file" "kube-proxy-config" {
   }
 }
 # Create kubernetes master node
-resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
+resource "openstack_compute_instance_v2" "terrakube-kube-master" {
    name = "${var.name_prefix}_master"
    image_id = "${var.image_id}"
    flavor_id = "${var.flavor_id}"
@@ -100,85 +76,13 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
       uuid = "${var.private_net_id}"
    }
   provisioner "file" {
-      source = "units/flannel.service"
-      destination = "/tmp/flannel.service"
+      source = "units/"
+      destination = "/tmp/"
       connection {
         user = "core"
         key_file = "${var.ssh_priv_key_file}"
         agent = false
       }
-  }
-  provisioner "file" {
-      source = "units/docker.service"
-      destination = "/tmp/docker.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-      source = "units/etcd.service"
-      destination = "/tmp/etcd.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-      source = "units/kube-apiserver.service"
-      destination = "/tmp/kube-apiserver.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-      source = "units/apiserver-advertiser.service"
-      destination = "/tmp/apiserver-advertiser.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-      source = "units/kube-controller-manager.service"
-      destination = "/tmp/kube-controller-manager.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-      source = "units/kube-scheduler.service"
-      destination = "/tmp/kube-scheduler.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-      source = "units/kube-nginx.service"
-      destination = "/tmp/kube-nginx.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-    source = "units/tokens.csv"
-    destination = "/tmp/known_tokens.csv"
-    connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-    }
   }
   provisioner "remote-exec" {
      inline = [
@@ -249,7 +153,7 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-master" {
 }
 
 # Create kubernetes worker nodes
-resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
+resource "openstack_compute_instance_v2" "terrakube-kube-workers" {
    count = "${var.worker_count}"
    name = "${var.name_prefix}_worker${count.index}"
    image_id = "${var.image_id}"
@@ -262,72 +166,8 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
     uuid = "${var.private_net_id}"
    }
    provisioner "file" {
-      source = "units/docker.service"
-      destination = "/tmp/docker.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-   provisioner "file" {
-      source = "units/etcd.service"
-      destination = "/tmp/etcd.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-      source = "units/flannel.service"
-      destination = "/tmp/flannel.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-      source = "units/apiservers-finder.service"
-      destination = "/tmp/apiservers-finder.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-      source = "units/apiservers-list.sh"
-      destination = "/tmp/apiservers-list.sh"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-      source = "units/kube-kubelet.service"
-      destination = "/tmp/kube-kubelet.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-
- provisioner "file" {
-      source = "units/kube-proxy.service"
-      destination = "/tmp/kube-proxy.service"
-      connection {
-        user = "core"
-        key_file = "${var.ssh_priv_key_file}"
-        agent = false
-      }
-  }
-  provisioner "file" {
-      source = "units/kubeconfig"
-      destination = "/tmp/kubeconfig"
+      source = "units/"
+      destination = "/tmp/"
       connection {
         user = "core"
         key_file = "${var.ssh_priv_key_file}"
@@ -390,15 +230,15 @@ resource "openstack_compute_instance_v2" "suda-terraform-kube-workers" {
      }
    }
    depends_on = [
-        "openstack_compute_instance_v2.suda-terraform-kube-master",
+        "openstack_compute_instance_v2.terrakube-kube-master",
         "template_file.kubernetes",
     ]
 }
 
 output "master_ip" {
-  value = "${openstack_compute_instance_v2.suda-terraform-kube-master.network.0.fixed_ip_v4}"
+  value = "${openstack_compute_instance_v2.terrakube-kube-master.network.0.fixed_ip_v4}"
 }
 
 output "worker_ips" {
-  value = "${join(",", "${formatlist("%s", openstack_compute_instance_v2.suda-terraform-kube-workers.*.access_ip_v4)}")}"
+  value = "${join(",", "${formatlist("%s", openstack_compute_instance_v2.terrakube-kube-workers.*.access_ip_v4)}")}"
 }
