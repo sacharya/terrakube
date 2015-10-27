@@ -2,8 +2,6 @@ variable "username" {}
 variable "tenant_name" {}
 variable "password" {}
 variable "auth_url" {}
-variable "subnet_id" {}
-variable "region_name" {}
 variable "flavor_id" {}
 variable "image_id" {}
 variable "name_prefix" {}

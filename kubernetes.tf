@@ -26,18 +26,8 @@ resource "openstack_compute_secgroup_v2" "secgroup" {
     cidr = "0.0.0.0/0"
   }
 }
-resource "template_file" "cloudconf" {
-  filename = "cloud.conf"
-  vars {
-    auth_url = "${var.auth_url}"
-    username = "${var.username}"
-    password = "${var.password}"
-    tenant_name = "${var.tenant_name}"
-    subnet_id = "${var.subnet_id}"
-  }
-}
 resource "template_file" "kubernetes" {
-  filename = "units/kubernetes.env"
+  filename = "files/kubernetes.env"
   vars {
     etcd_cluster_name = "${var.etcd_cluster_name}"
     etcd_discovery_url = "${var.etcd_discovery_url}"    
@@ -45,20 +35,20 @@ resource "template_file" "kubernetes" {
   }
 }
 resource "template_file" "tokens" {
-  filename = "units/tokens.csv"
+  filename = "files/tokens.csv"
   vars {
     kubelet_token = "${var.kubelet_token}"
     kube_proxy_token = "${var.kube_proxy_token}"
   }
 }
 resource "template_file" "kubeconfig" {
-  filename = "units/kubeconfig"
+  filename = "files/kubeconfig"
   vars {
     kubelet_token = "${var.kubelet_token}"
   }
 }
 resource "template_file" "kube-proxy-config" {
-  filename = "units/kube-proxy-config"
+  filename = "files/kube-proxy-config"
   vars {
     kube_proxy_token = "${var.kube_proxy_token}"
   }
@@ -71,7 +61,7 @@ resource "openstack_compute_instance_v2" "terrakube-kube-master" {
    key_pair = "${openstack_compute_keypair_v2.keypair.name}"
    security_groups = ["${openstack_compute_secgroup_v2.secgroup.name}"]
    config_drive="true"
-   user_data="${file("cloud-config.yaml")}"
+   user_data="${file("files/cloud-config.yaml")}"
    network {
       uuid = "${var.private_net_id}"
    }
@@ -86,10 +76,6 @@ resource "openstack_compute_instance_v2" "terrakube-kube-master" {
   }
   provisioner "remote-exec" {
      inline = [
-        "sudo bash -c \"echo 'nameserver 8.8.8.8' >> /etc/resolv.conf\"",
-
-        "sudo bash -c \"cat <<'EOF' > /etc/cloud.conf\n${template_file.cloudconf.rendered}\nEOF\"",
-
         "sudo mkdir -p /opt",
         "sudo wget https://storage.googleapis.com/kubernetes-release/release/v1.0.5/kubernetes.tar.gz -O /opt/kubernetes.tar.gz",
         "sudo rm -rf /opt/kubernetes || false",
@@ -161,12 +147,21 @@ resource "openstack_compute_instance_v2" "terrakube-kube-workers" {
    key_pair = "${openstack_compute_keypair_v2.keypair.name}"
    security_groups = ["${openstack_compute_secgroup_v2.secgroup.name}"]
    config_drive="true"
-   user_data="${file("cloud-config.yaml")}"
+   user_data="${file("files/cloud-config.yaml")}"
    network {
     uuid = "${var.private_net_id}"
    }
    provisioner "file" {
       source = "units/"
+      destination = "/tmp/"
+      connection {
+        user = "core"
+        key_file = "${var.ssh_priv_key_file}"
+        agent = false
+      }
+  }
+  provisioner "file" {
+      source = "files/"
       destination = "/tmp/"
       connection {
         user = "core"
@@ -190,24 +185,36 @@ resource "openstack_compute_instance_v2" "terrakube-kube-workers" {
         "echo 'ETCD_PEER_ADDR=${self.network.0.fixed_ip_v4}:7001'  | sudo tee -a /tmp/kubernetes.env",
         "echo 'ETCD_PEER_BIND_ADDR=${self.network.0.fixed_ip_v4}:7001'  | sudo tee -a /tmp/kubernetes.env",
         "echo 'HOSTNAME_OVERRIDE=--hostname_override=${self.network.0.fixed_ip_v4}' | sudo tee -a /tmp/kubernetes.env",
-        "echo 'FLANNEL_OPTS=--ip-masq=true' | sudo tee -a /tmp/kubernetes.env",
-        "echo 'FLANNEL_ETCDCTL_OPTS=-C ${self.network.0.fixed_ip_v4}' | sudo tee -a /tmp/kubernetes.env",
 
         "sudo cp /tmp/kubernetes.env /etc/kubernetes.env",
         "sudo cp /tmp/etcd.service /etc/systemd/system/etcd.service",
         "sudo systemctl restart etcd",
+
+
+        "echo '[NetDev]' | sudo tee /tmp/cbr0.netdev",
+        "echo 'Kind=bridge' | sudo tee -a /tmp/cbr0.netdev",
+        "echo 'Name=cbr0' | sudo tee -a /tmp/cbr0.netdev",
+        "sudo cp /tmp/cbr0.netdev /etc/systemd/network/cbr0.netdev",
+
+        "echo '[Match]' | sudo tee /tmp/cbr0.network",
+        "echo 'Name=cbr0' | sudo tee -a /tmp/cbr0.network",
+        "echo '[Network]' | sudo tee -a /tmp/cbr0.network",
+        "echo 'Address=10.0.${count.index+ 1}.1/24' | sudo tee -a /tmp/cbr0.network",
+        "sudo cp /tmp/cbr0.network /etc/systemd/network/cbr0.network",
+
+        "sudo chmod 0755 /tmp/apiservers-list.sh",
+        "sudo cp /tmp/apiservers-finder.service /etc/systemd/system/apiservers-finder.service",
+        "sudo systemctl restart apiservers-finder.service",
 
         "sudo /usr/bin/mkdir -p /etc/systemd/system/flanneld.service.d",
         "sudo cp /tmp/flannel.service /etc/systemd/system/flanneld.service.d/50-flannel.conf",
 
         "sudo /usr/bin/mkdir -p /etc/systemd/system/docker.service.d",
         "sudo cp /tmp/docker.service /etc/systemd/system/docker.service.d/51-docker-mirror.conf",
+        "sudo systemctl enable systemd-networkd",
+        "sudo systemctl restart systemd-networkd",
         "sudo systemctl restart flanneld.service",
         "sudo systemctl restart docker.service",
-
-        "sudo chmod 0755 /tmp/apiservers-list.sh",
-        "sudo cp /tmp/apiservers-finder.service /etc/systemd/system/apiservers-finder.service",
-        "sudo systemctl restart apiservers-finder.service",
 
         "sudo bash -c \"cat <<'EOF' > /tmp/kubeconfig\n${template_file.kubeconfig.rendered}\nEOF\"",
         "sudo /usr/bin/mkdir -p /var/lib/kubelet",
@@ -240,5 +247,5 @@ output "master_ip" {
 }
 
 output "worker_ips" {
-  value = "${join(",", "${formatlist("%s", openstack_compute_instance_v2.terrakube-kube-workers.*.access_ip_v4)}")}"
+  value = "${join(",", "${formatlist("%s", openstack_compute_instance_v2.terrakube-kube-workers.*.network.0.fixed_ip_v4)}")}"
 }

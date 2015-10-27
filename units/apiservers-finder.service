@@ -8,4 +8,4 @@ Requires=etcd.service
 ExecStartPre=/tmp/apiservers-list.sh
 ExecStart=/usr/bin/etcdctl exec-watch --recursive /corekube/apiservers -- /tmp/apiservers-list.sh
 Restart=always
-RestartSec=30
+RestartSec=7

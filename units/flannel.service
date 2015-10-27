@@ -3,7 +3,9 @@ Description=flannel is an etcd backed network fabric for containers
 Documentation=https://github.com/coreos/flannel
 After=etcd.service 
 Wants=etcd.service
+After=apiservers-finder.service
 
 [Service]
 EnvironmentFile=/etc/kubernetes.env
+ExecStartPre=/bin/sleep 10
 ExecStartPre=-/usr/bin/etcdctl mk $FLANNEL_ETCD_PREFIX ${FLANNEL_NETWORK_CONFIG}
