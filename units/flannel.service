@@ -7,5 +7,6 @@ After=apiservers-finder.service
 
 [Service]
 EnvironmentFile=/etc/kubernetes.env
-ExecStartPre=/bin/sleep 10
+EnvironmentFile=/etc/apiservers.env
+ExecStartPre=/bin/sh -c 'while [ -z $MASTER ]; do sleep 10; done'
 ExecStartPre=-/usr/bin/etcdctl mk $FLANNEL_ETCD_PREFIX ${FLANNEL_NETWORK_CONFIG}
